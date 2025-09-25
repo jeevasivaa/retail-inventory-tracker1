@@ -1,0 +1,1226 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventory Management - Inventory Pro{% endblock %}
+{% block page_title %}Inventory Management{% endblock %}
+
+{% block content %}
+<div class="inventory-management">
+  <!-- Action Bar -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="mb-0">Inventory Management</h3>
+      <p class="text-muted">Adjust stock levels, manage transfers, and track inventory</p>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-info" data-action="bulk-adjustment">
+        <i class="fas fa-edit"></i> Bulk Adjustment
+      </button>
+      <button class="btn btn-warning" data-action="stock-transfer">
+        <i class="fas fa-exchange-alt"></i> Stock Transfer
+      </button>
+      <button class="btn btn-success" data-action="add-stock">
+        <i class="fas fa-plus"></i> Add Stock
+      </button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row">
+        <div class="col-md-3">
+          <label class="form-label">Store</label>
+          <select class="form-control" id="storeFilter">
+            <option value="">All Stores</option>
+            {% for store in stores %}
+            <option value="{{ store.id }}">{{ store.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Product Category</label>
+          <select class="form-control" id="categoryFilter">
+            <option value="">All Categories</option>
+            {% for category in categories %}
+            <option value="{{ category.id }}">{{ category.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Stock Status</label>
+          <select class="form-control" id="stockStatusFilter">
+            <option value="">All</option>
+            <option value="low">Low Stock</option>
+            <option value="out">Out of Stock</option>
+            <option value="good">Good Stock</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">&nbsp;</label>
+          <div class="d-flex gap-2">
+            <button class="btn btn-primary" onclick="applyFilters()">Apply</button>
+            <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inventory Table -->
+  <div class="card">
+    <div class="card-body">
+      <div class="table-container">
+        <table class="table" id="inventoryTable">
+          <thead>
+            <tr>
+              <th>Store</th>
+              <th>Product</th>
+              <th>SKU</th>
+              <th>Current Stock</th>
+              <th>Reorder Point</th>
+              <th>Status</th>
+              <th>Last Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inventoryTableBody">
+            {% for item in inventory_items %}
+            <tr data-store-id="{{ item.store_id }}" data-product-id="{{ item.product_id }}" data-category-id="{{ item.category_id }}">
+              <td>
+                <div class="store-info">
+                  <strong>{{ item.store_name }}</strong>
+                  {% if item.store_location %}
+                  <br><small class="text-muted">{{ item.store_location }}</small>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <div class="product-info">
+                  <strong>{{ item.product_name }}</strong>
+                  {% if item.category_name %}
+                  <br><span class="badge badge-secondary">{{ item.category_name }}</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <span class="badge badge-primary">{{ item.sku }}</span>
+              </td>
+              <td>
+                <div class="stock-quantity" data-current-stock="{{ item.quantity }}">
+                  <span class="quantity-display">{{ item.quantity or 0 }}</span>
+                  <input type="number" class="form-control form-control-sm quantity-input" 
+                         value="{{ item.quantity or 0 }}" min="0" style="display: none;">
+                </div>
+              </td>
+              <td>{{ item.reorder_point or 0 }}</td>
+              <td>
+                <span class="stock-status 
+                  {% if (item.quantity or 0) <= (item.reorder_point or 0) and item.quantity > 0 %}
+                    badge-warning
+                  {% elif (item.quantity or 0) == 0 %}
+                    badge-danger
+                  {% else %}
+                    badge-success
+                  {% endif %}">
+                  {% if (item.quantity or 0) <= (item.reorder_point or 0) and item.quantity > 0 %}
+                    Low Stock
+                  {% elif (item.quantity or 0) == 0 %}
+                    Out of Stock
+                  {% else %}
+                    Good
+                  {% endif %}
+                </span>
+              </td>
+              <td>
+                {% if item.last_updated %}
+                  {{ item.last_updated.strftime('%m/%d/%Y') }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                <div class="btn-group">
+                  <button class="btn btn-sm btn-primary" data-action="adjust" 
+                          data-store-id="{{ item.store_id }}" data-product-id="{{ item.product_id }}"
+                          title="Adjust Stock">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button class="btn btn-sm btn-info" data-action="history" 
+                          data-store-id="{{ item.store_id }}" data-product-id="{{ item.product_id }}"
+                          title="View History">
+                    <i class="fas fa-history"></i>
+                  </button>
+                  <button class="btn btn-sm btn-warning" data-action="reorder" 
+                          data-product-id="{{ item.product_id }}"
+                          title="Set Reorder Point">
+                    <i class="fas fa-exclamation-triangle"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Adjustment Modal -->
+<div id="stockAdjustmentModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Adjust Stock Level</h3>
+      <span class="close" onclick="closeModal('stockAdjustmentModal')">&times;</span>
+    </div>
+    <div class="modal-body">
+      <form id="stockAdjustmentForm">
+        <input type="hidden" id="adjustStoreId">
+        <input type="hidden" id="adjustProductId">
+        
+        <div class="product-summary mb-3 p-3 bg-light rounded">
+          <h5 id="adjustProductName">Product Name</h5>
+          <p class="mb-1"><strong>Store:</strong> <span id="adjustStoreName">Store Name</span></p>
+          <p class="mb-1"><strong>Current Stock:</strong> <span id="adjustCurrentStock">0</span></p>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">New Stock Level</label>
+          <input type="number" id="adjustNewQuantity" class="form-control" min="0" required>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Reason for Adjustment</label>
+          <select class="form-control" id="adjustReason" required>
+            <option value="">Select Reason</option>
+            <option value="manual">Manual Count</option>
+            <option value="damage">Damaged Goods</option>
+            <option value="theft">Theft/Loss</option>
+            <option value="return">Customer Return</option>
+            <option value="supplier">Supplier Correction</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="adjustNotes" rows="3" 
+                    placeholder="Optional notes about this adjustment..."></textarea>
+        </div>
+        
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('stockAdjustmentModal')">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="saveStockAdjustment()">
+            <i class="fas fa-save"></i> Save Adjustment
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Stock Transfer Modal -->
+<div id="stockTransferModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Transfer Stock</h3>
+      <span class="close" onclick="closeModal('stockTransferModal')">&times;</span>
+    </div>
+    <div class="modal-body">
+      <form id="stockTransferForm">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group">
+              <label class="form-label">From Store</label>
+              <select class="form-control" id="transferFromStore" required>
+                <option value="">Select Source Store</option>
+                {% for store in stores %}
+                <option value="{{ store.id }}">{{ store.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-group">
+              <label class="form-label">To Store</label>
+              <select class="form-control" id="transferToStore" required>
+                <option value="">Select Destination Store</option>
+                {% for store in stores %}
+                <option value="{{ store.id }}">{{ store.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Product</label>
+          <select class="form-control" id="transferProduct" required>
+            <option value="">Select Product</option>
+            {% for product in products %}
+            <option value="{{ product.id }}">{{ product.sku }} - {{ product.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Quantity to Transfer</label>
+          <input type="number" class="form-control" id="transferQuantity" min="1" required>
+          <small class="text-muted">Available: <span id="transferAvailable">-</span></small>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Transfer Notes</label>
+          <textarea class="form-control" id="transferNotes" rows="2" 
+                    placeholder="Optional notes about this transfer..."></textarea>
+        </div>
+        
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('stockTransferModal')">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="executeTransfer()">
+            <i class="fas fa-exchange-alt"></i> Execute Transfer
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+.inventory-management {
+  max-width: 100%;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.stock-quantity {
+  position: relative;
+}
+
+.quantity-input {
+  width: 80px;
+}
+
+.stock-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.badge-success {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.badge-warning {
+  background-color: var(--warning-color);
+  color: white;
+}
+
+.badge-danger {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.badge-primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.product-summary {
+  border: 1px solid #dee2e6;
+}
+
+.store-info, .product-info {
+  line-height: 1.3;
+}
+
+/* Tab Styles */
+.tabs {
+  margin-bottom: 20px;
+}
+
+.tab-buttons {
+  display: flex;
+  border-bottom: 1px solid #dee2e6;
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-weight: 500;
+  color: #6c757d;
+  transition: all 0.3s ease;
+}
+
+.tab-btn.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+.tab-btn:hover {
+  color: var(--primary-color);
+  background-color: #f8f9fa;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Bulk Operations */
+.bulk-item {
+  padding: 10px;
+  border: 1px solid #e9ecef;
+  border-radius: 5px;
+  background-color: #f8f9fa;
+  margin-bottom: 10px;
+}
+
+.bulk-item:hover {
+  background-color: #e9ecef;
+}
+
+/* Alert Styles */
+.alert {
+  padding: 12px 20px;
+  border-radius: 5px;
+  margin-bottom: 15px;
+  border: 1px solid transparent;
+}
+
+.alert-info {
+  background-color: #d1ecf1;
+  border-color: #bee5eb;
+  color: #0c5460;
+}
+
+.alert-success {
+  background-color: #d4edda;
+  border-color: #c3e6cb;
+  color: #155724;
+}
+
+.alert-warning {
+  background-color: #fff3cd;
+  border-color: #ffeaa7;
+  color: #856404;
+}
+
+.alert-danger {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+/* Position fixed alerts */
+.position-fixed {
+  position: fixed;
+  z-index: 1050;
+  max-width: 300px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .bulk-item .row > div {
+    margin-bottom: 10px;
+  }
+  
+  .tab-buttons {
+    flex-direction: column;
+  }
+  
+  .tab-btn {
+    text-align: left;
+    border-bottom: 1px solid #dee2e6;
+    border-right: 2px solid transparent;
+  }
+  
+  .tab-btn.active {
+    border-bottom-color: #dee2e6;
+    border-right-color: var(--primary-color);
+  }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  initInventoryManagement();
+});
+
+function initInventoryManagement() {
+  // Initialize action handlers
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('[data-action]')) {
+      const button = e.target.closest('[data-action]');
+      const action = button.dataset.action;
+      
+      switch(action) {
+        case 'adjust':
+          openStockAdjustment(button.dataset.storeId, button.dataset.productId);
+          break;
+        case 'history':
+          viewStockHistory(button.dataset.storeId, button.dataset.productId);
+          break;
+        case 'reorder':
+          setReorderPoint(button.dataset.productId);
+          break;
+        case 'bulk-adjustment':
+          openBulkAdjustment();
+          break;
+        case 'stock-transfer':
+          openStockTransfer();
+          break;
+        case 'add-stock':
+          openAddStock();
+          break;
+      }
+    }
+  });
+  
+  // Transfer form listeners
+  document.getElementById('transferFromStore').addEventListener('change', updateTransferAvailable);
+  document.getElementById('transferProduct').addEventListener('change', updateTransferAvailable);
+}
+
+async function openStockAdjustment(storeId, productId) {
+  try {
+    // Get current inventory data
+    const response = await fetch(`/api/inventory/item?store=${storeId}&product=${productId}`);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      alert('Failed to load inventory data');
+      return;
+    }
+    
+    // Populate modal
+    document.getElementById('adjustStoreId').value = storeId;
+    document.getElementById('adjustProductId').value = productId;
+    document.getElementById('adjustProductName').textContent = data.product_name;
+    document.getElementById('adjustStoreName').textContent = data.store_name;
+    document.getElementById('adjustCurrentStock').textContent = data.quantity || 0;
+    document.getElementById('adjustNewQuantity').value = data.quantity || 0;
+    
+    // Show modal
+    document.getElementById('stockAdjustmentModal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } catch (error) {
+    console.error('Error opening stock adjustment:', error);
+    alert('Failed to load inventory data');
+  }
+}
+
+async function saveStockAdjustment() {
+  const storeId = document.getElementById('adjustStoreId').value;
+  const productId = document.getElementById('adjustProductId').value;
+  const quantity = parseInt(document.getElementById('adjustNewQuantity').value);
+  const reason = document.getElementById('adjustReason').value;
+  const notes = document.getElementById('adjustNotes').value;
+  
+  if (!reason) {
+    alert('Please select a reason for the adjustment');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/inventory/stock-level', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        store_id: storeId,
+        product_id: productId,
+        quantity: quantity,
+        note: `${reason}: ${notes}`.trim(),
+        transaction_type: 'adjustment',
+        user_id: 'user'
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      closeModal('stockAdjustmentModal');
+      showNotification('Stock level adjusted successfully', 'success');
+      location.reload();
+    } else {
+      alert(result.error || 'Failed to adjust stock level');
+    }
+  } catch (error) {
+    console.error('Error adjusting stock:', error);
+    alert('Failed to adjust stock level');
+  }
+}
+
+function openStockTransfer() {
+  document.getElementById('stockTransferModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+async function updateTransferAvailable() {
+  const storeId = document.getElementById('transferFromStore').value;
+  const productId = document.getElementById('transferProduct').value;
+  const availableSpan = document.getElementById('transferAvailable');
+  
+  if (!storeId || !productId) {
+    availableSpan.textContent = '-';
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/inventory/item?store=${storeId}&product=${productId}`);
+    const data = await response.json();
+    
+    if (response.ok) {
+      availableSpan.textContent = data.quantity || 0;
+      document.getElementById('transferQuantity').max = data.quantity || 0;
+    } else {
+      availableSpan.textContent = '0';
+    }
+  } catch (error) {
+    availableSpan.textContent = '0';
+  }
+}
+
+async function executeTransfer() {
+  const fromStoreId = document.getElementById('transferFromStore').value;
+  const toStoreId = document.getElementById('transferToStore').value;
+  const productId = document.getElementById('transferProduct').value;
+  const quantity = parseInt(document.getElementById('transferQuantity').value);
+  const notes = document.getElementById('transferNotes').value;
+  
+  if (!fromStoreId || !toStoreId || !productId || !quantity) {
+    alert('Please fill in all required fields');
+    return;
+  }
+  
+  if (fromStoreId === toStoreId) {
+    alert('Source and destination stores must be different');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/inventory/transfer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from_store_id: fromStoreId,
+        to_store_id: toStoreId,
+        product_id: productId,
+        quantity: quantity,
+        note: notes,
+        user_id: 'user'
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      closeModal('stockTransferModal');
+      showNotification('Stock transfer completed successfully', 'success');
+      location.reload();
+    } else {
+      alert(result.error || 'Failed to complete transfer');
+    }
+  } catch (error) {
+    console.error('Error executing transfer:', error);
+    alert('Failed to complete transfer');
+  }
+}
+
+function viewStockHistory(storeId, productId) {
+  // Navigate to transaction history with filters
+  window.location.href = `/transactions?store=${storeId}&product=${productId}`;
+}
+
+async function setReorderPoint(productId) {
+  const newReorderPoint = prompt('Enter new reorder point:');
+  if (newReorderPoint === null) return;
+  
+  const reorderPoint = parseInt(newReorderPoint);
+  if (isNaN(reorderPoint) || reorderPoint < 0) {
+    alert('Please enter a valid number (0 or greater)');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/inventory/reorder-point', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        product_id: productId,
+        reorder_point: reorderPoint
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      showNotification('Reorder point updated successfully', 'success');
+      location.reload();
+    } else {
+      alert(result.error || 'Failed to update reorder point');
+    }
+  } catch (error) {
+    console.error('Error updating reorder point:', error);
+    alert('Failed to update reorder point');
+  }
+}
+
+function openBulkAdjustment() {
+  const modalHTML = `
+    <div id="bulkAdjustmentModal" class="modal show">
+      <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+          <h3>Bulk Stock Operations</h3>
+          <span class="close" onclick="closeModal('bulkAdjustmentModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="tabs">
+            <div class="tab-buttons">
+              <button class="tab-btn active" data-tab="manual">Manual Entry</button>
+              <button class="tab-btn" data-tab="csv">CSV Import</button>
+            </div>
+            
+            <div id="manual-tab" class="tab-content active">
+              <p class="text-muted mb-3">Add multiple products to inventory manually:</p>
+              
+              <div id="bulkItemsContainer">
+                <div class="bulk-item row mb-2">
+                  <div class="col-md-3">
+                    <select class="form-control store-select" name="store_id" required>
+                      <option value="">Store</option>
+                      {% for store in stores %}
+                      <option value="{{ store.id }}">{{ store.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <select class="form-control product-select" name="product_id" required>
+                      <option value="">Product</option>
+                      {% for product in products %}
+                      <option value="{{ product.id }}">{{ product.sku }} - {{ product.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <input type="number" class="form-control" name="quantity" placeholder="Qty" min="1" required>
+                  </div>
+                  <div class="col-md-2">
+                    <input type="number" class="form-control" name="unit_cost" placeholder="Cost" step="0.01" min="0">
+                  </div>
+                  <div class="col-md-1">
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeBulkItem(this)">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <button type="button" class="btn btn-secondary btn-sm mb-3" onclick="addBulkItem()">
+                <i class="fas fa-plus"></i> Add Row
+              </button>
+              
+              <div class="form-group">
+                <label class="form-label">Bulk Notes</label>
+                <textarea class="form-control" id="bulkNotes" rows="2" 
+                          placeholder="Notes for all items in this bulk operation..."></textarea>
+              </div>
+            </div>
+            
+            <div id="csv-tab" class="tab-content">
+              <p class="text-muted mb-3">Upload a CSV file with columns: store_id, product_id, quantity, unit_cost, notes</p>
+              
+              <div class="form-group">
+                <label class="form-label">CSV File</label>
+                <input type="file" class="form-control" id="csvFile" accept=".csv" onchange="previewCSV(this)">
+              </div>
+              
+              <div id="csvPreview" style="display: none;">
+                <h5>Preview:</h5>
+                <div class="table-container" style="max-height: 200px; overflow-y: auto;">
+                  <table class="table table-sm" id="csvTable">
+                    <thead></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="d-flex justify-content-end gap-2 mt-4">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('bulkAdjustmentModal')">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="executeBulkOperation()">
+              <i class="fas fa-upload"></i> Execute Bulk Operation
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  document.body.style.overflow = 'hidden';
+  
+  // Initialize tab functionality
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      // Remove active class from all tabs and buttons
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      
+      // Add active class to clicked button and corresponding content
+      e.target.classList.add('active');
+      document.getElementById(e.target.dataset.tab + '-tab').classList.add('active');
+    });
+  });
+}
+
+function openAddStock() {
+  const modalHTML = `
+    <div id="addStockModal" class="modal show">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Add Stock</h3>
+          <span class="close" onclick="closeModal('addStockModal')">&times;</span>
+        </div>
+        <div class="modal-body">
+          <form id="addStockForm">
+            <div class="row">
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label class="form-label">Store *</label>
+                  <select class="form-control" id="addStockStore" required>
+                    <option value="">Select Store</option>
+                    {% for store in stores %}
+                    <option value="{{ store.id }}">{{ store.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-group">
+                  <label class="form-label">Product *</label>
+                  <select class="form-control" id="addStockProduct" required>
+                    <option value="">Select Product</option>
+                    {% for product in products %}
+                    <option value="{{ product.id }}">{{ product.sku }} - {{ product.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <div class="row">
+              <div class="col-md-4">
+                <div class="form-group">
+                  <label class="form-label">Quantity to Add *</label>
+                  <input type="number" class="form-control" id="addStockQuantity" min="1" required>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-group">
+                  <label class="form-label">Unit Cost</label>
+                  <input type="number" class="form-control" id="addStockCost" step="0.01" min="0" placeholder="0.00">
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="form-group">
+                  <label class="form-label">Reference #</label>
+                  <input type="text" class="form-control" id="addStockReference" placeholder="Optional">
+                </div>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Supplier (Optional)</label>
+              <select class="form-control" id="addStockSupplier">
+                <option value="">No Supplier</option>
+                <!-- Will be populated dynamically -->
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Notes</label>
+              <textarea class="form-control" id="addStockNotes" rows="3" 
+                        placeholder="Reason for stock addition, supplier details, etc..."></textarea>
+            </div>
+            
+            <div class="alert alert-info">
+              <i class="fas fa-info-circle"></i>
+              <strong>Current Stock:</strong> <span id="currentStockDisplay">Select product to view</span>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <button type="button" class="btn btn-secondary" onclick="closeModal('addStockModal')">Cancel</button>
+              <button type="button" class="btn btn-success" onclick="executeAddStock()">
+                <i class="fas fa-plus"></i> Add Stock
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  document.body.style.overflow = 'hidden';
+  
+  // Add event listeners
+  document.getElementById('addStockStore').addEventListener('change', updateCurrentStock);
+  document.getElementById('addStockProduct').addEventListener('change', updateCurrentStock);
+}
+
+function applyFilters() {
+  const storeFilter = document.getElementById('storeFilter').value;
+  const categoryFilter = document.getElementById('categoryFilter').value;
+  const statusFilter = document.getElementById('stockStatusFilter').value;
+  
+  const rows = document.querySelectorAll('#inventoryTable tbody tr');
+  
+  rows.forEach(row => {
+    let shouldShow = true;
+    
+    // Store filter
+    if (storeFilter && row.dataset.storeId !== storeFilter) {
+      shouldShow = false;
+    }
+    
+    // Category filter
+    if (categoryFilter && row.dataset.categoryId !== categoryFilter) {
+      shouldShow = false;
+    }
+    
+    // Status filter
+    if (statusFilter) {
+      const statusElement = row.querySelector('.stock-status');
+      const statusText = statusElement ? statusElement.textContent.toLowerCase() : '';
+      
+      if (statusFilter === 'low' && !statusText.includes('low')) {
+        shouldShow = false;
+      } else if (statusFilter === 'out' && !statusText.includes('out')) {
+        shouldShow = false;
+      } else if (statusFilter === 'good' && !statusText.includes('good')) {
+        shouldShow = false;
+      }
+    }
+    
+    row.style.display = shouldShow ? '' : 'none';
+  });
+}
+
+function clearFilters() {
+  document.getElementById('storeFilter').value = '';
+  document.getElementById('categoryFilter').value = '';
+  document.getElementById('stockStatusFilter').value = '';
+  
+  // Show all rows
+  document.querySelectorAll('#inventoryTable tbody tr').forEach(row => {
+    row.style.display = '';
+  });
+}
+
+function closeModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = 'auto';
+    
+    // Remove dynamic modals
+    if (modalId.includes('edit') || modalId.includes('delete')) {
+      modal.remove();
+    }
+  }
+}
+
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `alert alert-${type} position-fixed`;
+  notification.style.top = '20px';
+  notification.style.right = '20px';
+  notification.style.zIndex = '9999';
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
+}
+
+async function updateCurrentStock() {
+  const storeId = document.getElementById('addStockStore').value;
+  const productId = document.getElementById('addStockProduct').value;
+  const displayElement = document.getElementById('currentStockDisplay');
+  
+  if (!storeId || !productId) {
+    displayElement.textContent = 'Select store and product to view current stock';
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/inventory/item?store=${storeId}&product=${productId}`);
+    const data = await response.json();
+    
+    if (response.ok) {
+      displayElement.innerHTML = `
+        <strong>${data.product_name}</strong> at <strong>${data.store_name}</strong>: 
+        <span class="badge badge-primary">${data.quantity || 0} units</span>
+        ${data.reorder_point ? `(Reorder at ${data.reorder_point})` : ''}
+      `;
+    } else {
+      displayElement.textContent = 'Unable to load current stock';
+    }
+  } catch (error) {
+    displayElement.textContent = 'Error loading current stock';
+  }
+}
+
+async function executeAddStock() {
+  const storeId = document.getElementById('addStockStore').value;
+  const productId = document.getElementById('addStockProduct').value;
+  const quantity = parseInt(document.getElementById('addStockQuantity').value);
+  const unitCost = parseFloat(document.getElementById('addStockCost').value) || 0;
+  const reference = document.getElementById('addStockReference').value;
+  const supplierId = document.getElementById('addStockSupplier').value;
+  const notes = document.getElementById('addStockNotes').value;
+  
+  if (!storeId || !productId || !quantity) {
+    alert('Please fill in all required fields');
+    return;
+  }
+  
+  if (quantity <= 0) {
+    alert('Quantity must be positive');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/inventory/add-stock', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        store_id: storeId,
+        product_id: productId,
+        quantity: quantity,
+        unit_cost: unitCost,
+        supplier_id: supplierId || null,
+        reference_number: reference,
+        notes: notes || 'Stock addition',
+        user_id: 'user'
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      closeModal('addStockModal');
+      showNotification(`Successfully added ${quantity} units. New total: ${result.new_quantity}`, 'success');
+      location.reload();
+    } else {
+      alert(result.error || 'Failed to add stock');
+    }
+  } catch (error) {
+    console.error('Error adding stock:', error);
+    alert('Failed to add stock');
+  }
+}
+
+function addBulkItem() {
+  const container = document.getElementById('bulkItemsContainer');
+  const newItem = container.querySelector('.bulk-item').cloneNode(true);
+  
+  // Clear the values
+  newItem.querySelectorAll('input, select').forEach(input => {
+    input.value = '';
+  });
+  
+  container.appendChild(newItem);
+}
+
+function removeBulkItem(button) {
+  const container = document.getElementById('bulkItemsContainer');
+  if (container.children.length > 1) {
+    button.closest('.bulk-item').remove();
+  }
+}
+
+async function executeBulkOperation() {
+  const activeTab = document.querySelector('.tab-content.active').id;
+  
+  if (activeTab === 'manual-tab') {
+    await executeBulkManual();
+  } else if (activeTab === 'csv-tab') {
+    await executeBulkCSV();
+  }
+}
+
+async function executeBulkManual() {
+  const items = [];
+  const bulkItems = document.querySelectorAll('.bulk-item');
+  const bulkNotes = document.getElementById('bulkNotes').value;
+  
+  bulkItems.forEach((item, index) => {
+    const storeId = item.querySelector('[name="store_id"]').value;
+    const productId = item.querySelector('[name="product_id"]').value;
+    const quantity = parseInt(item.querySelector('[name="quantity"]').value);
+    const unitCost = parseFloat(item.querySelector('[name="unit_cost"]').value) || 0;
+    
+    if (storeId && productId && quantity > 0) {
+      items.push({
+        store_id: storeId,
+        product_id: productId,
+        quantity: quantity,
+        unit_cost: unitCost,
+        notes: bulkNotes || `Bulk item ${index + 1}`
+      });
+    }
+  });
+  
+  if (items.length === 0) {
+    alert('Please add at least one valid item');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/inventory/bulk-add', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: items })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      closeModal('bulkAdjustmentModal');
+      let message = `Bulk operation completed! ${result.success_count} items processed successfully.`;
+      if (result.errors.length > 0) {
+        message += ` ${result.errors.length} errors occurred.`;
+      }
+      showNotification(message, result.errors.length > 0 ? 'warning' : 'success');
+      location.reload();
+    } else {
+      alert(result.error || 'Failed to execute bulk operation');
+    }
+  } catch (error) {
+    console.error('Error executing bulk operation:', error);
+    alert('Failed to execute bulk operation');
+  }
+}
+
+function previewCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const csv = e.target.result;
+    const lines = csv.split('\\n').filter(line => line.trim());
+    const headers = lines[0].split(',');
+    const preview = document.getElementById('csvPreview');
+    const table = document.getElementById('csvTable');
+    
+    // Build table header
+    table.querySelector('thead').innerHTML = '<tr>' + headers.map(h => `<th>${h.trim()}</th>`).join('') + '</tr>';
+    
+    // Build table body (show first 5 rows)
+    const rows = lines.slice(1, 6).map(line => {
+      const cells = line.split(',');
+      return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+    }).join('');
+    
+    table.querySelector('tbody').innerHTML = rows;
+    preview.style.display = 'block';
+  };
+  
+  reader.readAsText(file);
+}
+
+async function executeBulkCSV() {
+  const fileInput = document.getElementById('csvFile');
+  const file = fileInput.files[0];
+  
+  if (!file) {
+    alert('Please select a CSV file');
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const csv = e.target.result;
+    const lines = csv.split('\\n').filter(line => line.trim());
+    const headers = lines[0].split(',').map(h => h.trim());
+    const items = [];
+    
+    // Expected headers: store_id, product_id, quantity, unit_cost, notes
+    for (let i = 1; i < lines.length; i++) {
+      const cells = lines[i].split(',').map(c => c.trim());
+      if (cells.length >= 3) {
+        items.push({
+          store_id: parseInt(cells[0]),
+          product_id: parseInt(cells[1]),
+          quantity: parseInt(cells[2]),
+          unit_cost: parseFloat(cells[3]) || 0,
+          notes: cells[4] || `CSV import row ${i}`
+        });
+      }
+    }
+    
+    if (items.length === 0) {
+      alert('No valid items found in CSV');
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/inventory/bulk-add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ items: items })
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        closeModal('bulkAdjustmentModal');
+        let message = `CSV import completed! ${result.success_count} items processed successfully.`;
+        if (result.errors.length > 0) {
+          message += ` ${result.errors.length} errors occurred.`;
+        }
+        showNotification(message, result.errors.length > 0 ? 'warning' : 'success');
+        location.reload();
+      } else {
+        alert(result.error || 'Failed to import CSV');
+      }
+    } catch (error) {
+      console.error('Error importing CSV:', error);
+      alert('Failed to import CSV');
+    }
+  };
+  
+  reader.readAsText(file);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block title %}Reports - Inventory Pro{% endblock %}
+{% block page_title %}Reports & Analytics{% endblock %}
+
+{% block breadcrumb %}
+<a href="/"><i class="fas fa-home"></i> Dashboard</a>
+<span>/</span>
+<a href="/reports">Reports</a>
+{% endblock %}
+
+{% block content %}
+<!-- Reports Dashboard -->
+<div class="row">
+  <!-- Category Summary -->
+  <div class="col-6">
+    <div class="card">
+      <div class="card-header">
+        <h4>Inventory by Category</h4>
+      </div>
+      <div class="card-body">
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Products</th>
+                <th>Total Qty</th>
+                <th>Total Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in category_summary %}
+              <tr>
+                <td>{{ item.category or 'Uncategorized' }}</td>
+                <td>{{ item.product_count }}</td>
+                <td>{{ item.total_quantity }}</td>
+                <td>₹{{ "%.2f"|format(item.total_value or 0) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Store Summary -->
+  <div class="col-6">
+    <div class="card">
+      <div class="card-header">
+        <h4>Inventory by Store</h4>
+      </div>
+      <div class="card-body">
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Store</th>
+                <th>Products</th>
+                <th>Total Items</th>
+                <th>Total Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in store_summary %}
+              <tr>
+                <td>{{ item.store_name }}</td>
+                <td>{{ item.unique_products }}</td>
+                <td>{{ item.total_items }}</td>
+                <td>₹{{ "%.2f"|format(item.total_value or 0) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction Summary -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h4>Transaction Summary (Last 30 Days)</h4>
+      </div>
+      <div class="card-body">
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Transaction Type</th>
+                <th>Count</th>
+                <th>Total Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in transaction_summary %}
+              <tr>
+                <td>{{ item.transaction_type|title }}</td>
+                <td>{{ item.transaction_count }}</td>
+                <td>
+                  {% if item.total_change > 0 %}
+                    <span class="text-success">+{{ item.total_change }}</span>
+                  {% elif item.total_change < 0 %}
+                    <span class="text-danger">{{ item.total_change }}</span>
+                  {% else %}
+                    <span class="text-muted">0</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

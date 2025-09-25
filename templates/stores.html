@@ -1,0 +1,543 @@
+{% extends 'base.html' %}
+
+{% block title %}Stores - Inventory Pro{% endblock %}
+{% block page_title %}Store Management{% endblock %}
+
+{% block breadcrumb %}
+<a href="/"><i class="fas fa-home"></i> Dashboard</a>
+<span>/</span>
+<a href="/stores">Stores</a>
+{% endblock %}
+
+{% block content %}
+<!-- Action Bar -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h3 class="mb-0">All Stores</h3>
+    <p class="text-muted">Manage your store locations</p>
+  </div>
+  <button class="btn btn-primary" data-toggle="modal" data-target="addStoreModal">
+    <i class="fas fa-plus"></i> Add Store
+  </button>
+</div>
+
+<!-- Stores Grid -->
+<div class="row">
+  {% for store in stores %}
+  <div class="col-4">
+    <div class="card store-card">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h4 class="mb-1">{{ store.name }}</h4>
+            {% if store.location %}
+            <p class="text-muted mb-0">
+              <i class="fas fa-map-marker-alt"></i> {{ store.location }}
+            </p>
+            {% endif %}
+          </div>
+          <div class="dropdown">
+            <button class="btn btn-sm btn-secondary" data-toggle="dropdown">
+              <i class="fas fa-ellipsis-v"></i>
+            </button>
+            <div class="dropdown-menu">
+              <a href="/store/{{ store.id }}" class="dropdown-item">
+                <i class="fas fa-eye"></i> View Details
+              </a>
+              <a href="#" class="dropdown-item" data-action="edit" data-store-id="{{ store.id }}">
+                <i class="fas fa-edit"></i> Edit Store
+              </a>
+              <div class="dropdown-divider"></div>
+              <a href="#" class="dropdown-item text-danger" data-action="delete" data-store-id="{{ store.id }}">
+                <i class="fas fa-trash"></i> Delete Store
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- Store Stats -->
+        <div class="store-stats">
+          <div class="stat-item">
+            <div class="stat-icon">
+              <i class="fas fa-boxes"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value">{{ store.product_count or 0 }}</div>
+              <div class="stat-label">Products</div>
+            </div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-icon">
+              <i class="fas fa-dollar-sign"></i>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value">₹{{ "%.0f"|format(store.total_value or 0) }}</div>
+              <div class="stat-label">Total Value</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Store Details -->
+        <div class="store-details mt-3">
+          {% if store.manager_name %}
+          <div class="detail-item">
+            <i class="fas fa-user"></i>
+            <span>Manager: {{ store.manager_name }}</span>
+          </div>
+          {% endif %}
+          
+          {% if store.phone %}
+          <div class="detail-item">
+            <i class="fas fa-phone"></i>
+            <span>{{ store.phone }}</span>
+          </div>
+          {% endif %}
+          
+          {% if store.email %}
+          <div class="detail-item">
+            <i class="fas fa-envelope"></i>
+            <span>{{ store.email }}</span>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="store-actions mt-3">
+          <a href="/store/{{ store.id }}" class="btn btn-primary btn-sm">
+            <i class="fas fa-warehouse"></i> Manage Inventory
+          </a>
+          <button class="btn btn-secondary btn-sm" data-action="reports" data-store-id="{{ store.id }}">
+            <i class="fas fa-chart-line"></i> Reports
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  
+  {% if stores|length == 0 %}
+  <div class="col-12">
+    <div class="text-center py-5">
+      <i class="fas fa-store-slash fa-3x text-muted mb-3"></i>
+      <h4>No Stores Found</h4>
+      <p class="text-muted">Get started by adding your first store location.</p>
+      <button class="btn btn-primary" data-toggle="modal" data-target="addStoreModal">
+        <i class="fas fa-plus"></i> Add Your First Store
+      </button>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Add Store Modal -->
+<div id="addStoreModal" class="modal">
+  <div class="modal-content" style="max-width: 500px;">
+    <div class="modal-header">
+      <h3>Add New Store</h3>
+      <span class="close" onclick="closeModal('addStoreModal')">&times;</span>
+    </div>
+    <div class="modal-body">
+      <form id="addStoreForm" method="post" action="/api/store">
+        <div class="form-group">
+          <label class="form-label">Store Name *</label>
+          <input type="text" name="name" class="form-control" required placeholder="e.g., Downtown Branch">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Location</label>
+          <input type="text" name="location" class="form-control" placeholder="e.g., 123 Main St, City, State">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Manager Name</label>
+          <input type="text" name="manager_name" class="form-control" placeholder="Store manager's name">
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input type="tel" name="phone" class="form-control" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" placeholder="store@example.com">
+          </div>
+        </div>
+        
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('addStoreModal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Store
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Store page specific styles */
+.store-card {
+  transition: var(--transition);
+  border: 2px solid transparent;
+}
+
+.store-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-color);
+}
+
+.store-stats {
+  display: flex;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+  padding: var(--spacing-md);
+  background: var(--gray-50);
+  border-radius: var(--radius-lg);
+}
+
+.stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--gray-800);
+  margin-bottom: var(--spacing-xs);
+}
+
+.stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.store-details {
+  border-top: 1px solid var(--gray-200);
+  padding-top: var(--spacing-md);
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--gray-600);
+}
+
+.detail-item i {
+  width: 16px;
+  text-align: center;
+  color: var(--gray-400);
+}
+
+.store-actions {
+  border-top: 1px solid var(--gray-200);
+  padding-top: var(--spacing-md);
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  min-width: 150px;
+  z-index: 1000;
+  padding: var(--spacing-sm) 0;
+}
+
+.dropdown-menu.show {
+  display: block;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  color: var(--gray-700);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  transition: var(--transition);
+}
+
+.dropdown-item:hover {
+  background: var(--gray-50);
+  color: var(--gray-800);
+}
+
+.dropdown-item.text-danger {
+  color: var(--danger-color);
+}
+
+.dropdown-item.text-danger:hover {
+  background: rgba(245, 101, 101, 0.1);
+  color: var(--danger-color);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--gray-200);
+  margin: var(--spacing-sm) 0;
+}
+</style>
+
+<script>
+// Stores page JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize dropdowns
+  initDropdowns();
+  
+  // Initialize modals
+  initModals();
+  
+  // Add event delegation for store actions
+  document.addEventListener('click', function(e) {
+    if (e.target.closest('[data-action]')) {
+      const element = e.target.closest('[data-action]');
+      const action = element.dataset.action;
+      const storeId = element.dataset.storeId;
+      
+      switch(action) {
+        case 'edit':
+          editStore(storeId);
+          break;
+        case 'delete':
+          deleteStore(storeId);
+          break;
+        case 'reports':
+          viewStoreReports(storeId);
+          break;
+      }
+      
+      e.preventDefault();
+    }
+  });
+});
+
+function initDropdowns() {
+  document.addEventListener('click', function(e) {
+    // Handle dropdown toggles
+    if (e.target.matches('[data-toggle="dropdown"]') || e.target.closest('[data-toggle="dropdown"]')) {
+      const dropdown = e.target.closest('.dropdown');
+      const menu = dropdown.querySelector('.dropdown-menu');
+      
+      // Close all other dropdowns
+      document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+        menu.classList.remove('show');
+      });
+      
+      // Toggle current dropdown
+      menu.classList.toggle('show');
+      e.preventDefault();
+      e.stopPropagation();
+    } else {
+      // Close all dropdowns when clicking outside
+      document.querySelectorAll('.dropdown-menu.show').forEach(menu => {
+        menu.classList.remove('show');
+      });
+    }
+  });
+}
+
+function initModals() {
+  // Add store modal
+  document.querySelector('[data-target="addStoreModal"]').addEventListener('click', () => {
+    document.getElementById('addStoreModal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  });
+  
+  // Form submission
+  document.getElementById('addStoreForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    if (window.inventoryApp) {
+      window.inventoryApp.showLoading();
+    }
+    
+    // Submit form normally
+    this.submit();
+  });
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.remove('show');
+  document.body.style.overflow = 'auto';
+}
+
+async function editStore(storeId) {
+  try {
+    // Get store data
+    const response = await fetch(`/api/store/${storeId}`);
+    if (!response.ok) throw new Error('Store not found');
+    
+    const store = await response.json();
+    
+    // Create edit modal
+    const modalHTML = `
+      <div id="editStoreModal" class="modal show">
+        <div class="modal-content" style="max-width: 500px;">
+          <div class="modal-header">
+            <h3>Edit Store</h3>
+            <span class="close" onclick="closeModal('editStoreModal')">&times;</span>
+          </div>
+          <div class="modal-body">
+            <form id="editStoreForm">
+              <div class="form-group">
+                <label class="form-label">Store Name *</label>
+                <input type="text" name="name" class="form-control" value="${store.name || ''}" required>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Location</label>
+                <input type="text" name="location" class="form-control" value="${store.location || ''}" 
+                       placeholder="e.g., 123 Main St, City, State">
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Manager Name</label>
+                <input type="text" name="manager_name" class="form-control" value="${store.manager_name || ''}" 
+                       placeholder="Store Manager Name">
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Phone</label>
+                  <input type="tel" name="phone" class="form-control" value="${store.phone || ''}" 
+                         placeholder="(555) 123-4567">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Email</label>
+                  <input type="email" name="email" class="form-control" value="${store.email || ''}" 
+                         placeholder="store@example.com">
+                </div>
+              </div>
+              
+              <div class="d-flex justify-content-end gap-2 mt-4">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('editStoreModal')">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveStoreChanges(${store.id})">
+                  <i class="fas fa-save"></i> Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    document.body.style.overflow = 'hidden';
+  } catch (error) {
+    console.error('Error loading store:', error);
+    alert('Failed to load store data');
+  }
+}
+
+async function saveStoreChanges(storeId) {
+  const form = document.getElementById('editStoreForm');
+  const formData = new FormData(form);
+  const data = Object.fromEntries(formData.entries());
+  
+  try {
+    const response = await fetch(`/api/store/${storeId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      closeModal('editStoreModal');
+      showNotification('Store updated successfully', 'success');
+      location.reload();
+    } else {
+      alert(result.error || 'Failed to update store');
+    }
+  } catch (error) {
+    console.error('Error updating store:', error);
+    alert('Failed to update store');
+  }
+}
+
+async function deleteStore(storeId) {
+  if (!confirm('Are you sure you want to delete this store?\\n\\nThis will also delete all related inventory records and transactions.\\n\\nThis action cannot be undone.')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/store/${storeId}`, {
+      method: 'DELETE'
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      showNotification('Store deleted successfully', 'success');
+      location.reload();
+    } else {
+      alert(result.error || 'Failed to delete store');
+    }
+  } catch (error) {
+    console.error('Error deleting store:', error);
+    alert('Failed to delete store');
+  }
+}
+
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `alert alert-${type} position-fixed`;
+  notification.style.top = '20px';
+  notification.style.right = '20px';
+  notification.style.zIndex = '9999';
+  notification.textContent = message;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
+}
+
+function viewStoreReports(storeId) {
+  // Navigate to reports page with store filter
+  window.location.href = `/reports?store=${storeId}`;
+}
+</script>
+{% endblock %}

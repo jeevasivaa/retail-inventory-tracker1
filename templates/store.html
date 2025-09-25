@@ -1,0 +1,624 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ store.name }} - Store Management{% endblock %}
+{% block page_title %}{{ store.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/"><i class="fas fa-home"></i> Dashboard</a>
+<span>/</span>
+<a href="/stores">Stores</a>
+<span>/</span>
+<span>{{ store.name }}</span>
+{% endblock %}
+
+{% block content %}
+<!-- Store Header -->
+<div class="row mb-4">
+  <div class="col-8">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h3 class="mb-2">{{ store.name }}</h3>
+            {% if store.location %}
+            <p class="text-muted mb-2">
+              <i class="fas fa-map-marker-alt"></i> {{ store.location }}
+            </p>
+            {% endif %}
+            
+            <div class="store-contact-info">
+              {% if store.manager_name %}
+              <span class="badge badge-secondary me-2">
+                <i class="fas fa-user"></i> Manager: {{ store.manager_name }}
+              </span>
+              {% endif %}
+              
+              {% if store.phone %}
+              <span class="badge badge-secondary me-2">
+                <i class="fas fa-phone"></i> {{ store.phone }}
+              </span>
+              {% endif %}
+              
+              {% if store.email %}
+              <span class="badge badge-secondary">
+                <i class="fas fa-envelope"></i> {{ store.email }}
+              </span>
+              {% endif %}
+            </div>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <button class="btn btn-secondary" onclick="editStore()">
+              <i class="fas fa-edit"></i> Edit Store
+            </button>
+            <button class="btn btn-info" onclick="viewReports()">
+              <i class="fas fa-chart-line"></i> Reports
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-4">
+    <!-- Store Stats -->
+    <div class="row">
+      <div class="col-12 mb-3">
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">Products</span>
+            <div class="stat-icon primary">
+              <i class="fas fa-boxes"></i>
+            </div>
+          </div>
+          <div class="stat-value">{{ inventory_count or 0 }}</div>
+          <div class="stat-change positive">
+            <i class="fas fa-chart-line"></i> Unique items
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-12">
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">Inventory Value</span>
+            <div class="stat-icon success">
+              <i class="fas fa-dollar-sign"></i>
+            </div>
+          </div>
+          <div class="stat-value">₹{{ "%.2f"|format(total_value or 0) }}</div>
+          <div class="stat-change positive">
+            <i class="fas fa-trending-up"></i> Total worth
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex align-items-center gap-3">
+        <div class="form-check">
+          <input id="autorefresh" type="checkbox" class="form-check-input" checked>
+          <label class="form-check-label" for="autorefresh">Auto-refresh (5s)</label>
+        </div>
+        
+        <div class="input-group" style="width: 300px;">
+          <span class="input-group-text">
+            <i class="fas fa-search"></i>
+          </span>
+          <input type="text" class="form-control" id="searchInput" placeholder="Search products...">
+        </div>
+      </div>
+      
+      <div class="d-flex gap-2">
+        <button class="btn btn-secondary" onclick="exportInventory()">
+          <i class="fas fa-download"></i> Export
+        </button>
+        <button class="btn btn-success" onclick="addStock()">
+          <i class="fas fa-plus"></i> Add Stock
+        </button>
+        <button class="btn btn-warning" onclick="bulkAdjust()">
+          <i class="fas fa-edit"></i> Bulk Adjust
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Inventory Table -->
+<div class="card">
+  <div class="card-header">
+    <h4 class="mb-0">Store Inventory</h4>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-container">
+      <table id="invTable" class="table">
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Product</th>
+            <th>Category</th>
+            <th>Current Stock</th>
+            <th>Reorder Point</th>
+            <th>Status</th>
+            <th>Quick Adjust</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Data loaded via JavaScript -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Stock Modal -->
+<div id="addStockModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Add Stock</h3>
+      <span class="close" onclick="closeAddStockModal()">&times;</span>
+    </div>
+    <div class="modal-body">
+      <form id="addStockForm">
+        <div class="form-group">
+          <label class="form-label">Product</label>
+          <select id="productSelect" class="form-control" required>
+            <option value="">Select a product</option>
+            <!-- Options loaded dynamically -->
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Quantity to Add</label>
+          <input type="number" id="addQuantity" class="form-control" min="1" required placeholder="Enter quantity">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Transaction Type</label>
+          <select id="addTransactionType" class="form-control">
+            <option value="purchase">Stock Purchase</option>
+            <option value="return">Product Return</option>
+            <option value="manual">Manual Adjustment</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea id="addNotes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+        
+        <div class="d-flex justify-content-end gap-2 mt-4">
+          <button type="button" class="btn btn-secondary" onclick="closeAddStockModal()">Cancel</button>
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-plus"></i> Add Stock
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Store page specific styles */
+.store-contact-info .badge {
+  background: var(--gray-100);
+  color: var(--gray-700);
+  font-weight: normal;
+}
+
+.input-group-text {
+  background: var(--gray-50);
+  border-color: var(--gray-300);
+  color: var(--gray-500);
+}
+
+.quick-adjust {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.quick-adjust input {
+  width: 80px;
+  padding: var(--spacing-xs);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.stock-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.stock-status.normal {
+  background: rgba(72, 187, 120, 0.1);
+  color: var(--success-color);
+}
+
+.stock-status.low {
+  background: rgba(237, 137, 54, 0.1);
+  color: var(--warning-color);
+}
+
+.stock-status.out {
+  background: rgba(245, 101, 101, 0.1);
+  color: var(--danger-color);
+}
+
+.product-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.product-name {
+  font-weight: 500;
+  color: var(--gray-800);
+}
+
+.product-category {
+  font-size: var(--font-size-xs);
+  color: var(--gray-500);
+}
+
+.sku-badge {
+  background: var(--primary-color);
+  color: white;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-family: monospace;
+  font-weight: 500;
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.badge-secondary {
+  background: var(--gray-500);
+  color: white;
+}
+
+.me-2 {
+  margin-right: var(--spacing-sm);
+}
+</style>
+
+<script>
+// Store inventory management
+const STORE_ID = "{{ store.id }}";
+let polling = null;
+let inventoryData = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+  loadInventories();
+  initializeControls();
+  startPolling();
+});
+
+async function loadInventories() {
+  try {
+    const res = await fetch(`/api/inventories/${STORE_ID}`);
+    inventoryData = await res.json();
+    
+    const tbody = document.querySelector('#invTable tbody');
+    tbody.innerHTML = '';
+    
+    inventoryData.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.className = 'inventory-row';
+      
+      // Determine stock status
+      let statusClass = 'normal';
+      let statusText = 'Normal';
+      let statusIcon = 'fa-check-circle';
+      
+      if (item.quantity === 0) {
+        statusClass = 'out';
+        statusText = 'Out of Stock';
+        statusIcon = 'fa-times-circle';
+      } else if (item.low_stock || item.quantity <= (item.reorder_point || 10)) {
+        statusClass = 'low';
+        statusText = 'Low Stock';
+        statusIcon = 'fa-exclamation-triangle';
+      }
+      
+      tr.innerHTML = `
+        <td><span class="sku-badge">${item.sku}</span></td>
+        <td>
+          <div class="product-info">
+            <span class="product-name">${item.name}</span>
+            ${item.category_name ? `<span class="product-category">${item.category_name}</span>` : ''}
+          </div>
+        </td>
+        <td>${item.category_name || '-'}</td>
+        <td><strong>${item.quantity}</strong></td>
+        <td>${item.reorder_point || 10}</td>
+        <td>
+          <span class="stock-status ${statusClass}">
+            <i class="fas ${statusIcon}"></i>
+            ${statusText}
+          </span>
+        </td>
+        <td>
+          <div class="quick-adjust">
+            <input type="number" min="-100000" max="100000" value="0" 
+                   data-pid="${item.product_id}" class="delta" placeholder="±">
+            <button class="btn btn-sm btn-primary apply" data-pid="${item.product_id}">
+              <i class="fas fa-check"></i>
+            </button>
+          </div>
+        </td>
+        <td>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-info" onclick="viewProductHistory(${item.product_id})" 
+                    data-tooltip="View History">
+              <i class="fas fa-history"></i>
+            </button>
+            <button class="btn btn-sm btn-warning" onclick="setReorderPoint(${item.product_id})" 
+                    data-tooltip="Set Reorder Point">
+              <i class="fas fa-exclamation-triangle"></i>
+            </button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    
+    // Update search functionality
+    filterInventory();
+    
+  } catch (error) {
+    console.error('Failed to load inventories:', error);
+    if (window.inventoryApp) {
+      window.inventoryApp.showAlert('error', 'Failed to load inventory data');
+    }
+  }
+}
+
+function initializeControls() {
+  // Search functionality
+  const searchInput = document.getElementById('searchInput');
+  let searchTimeout;
+  
+  searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(filterInventory, 300);
+  });
+  
+  // Auto-refresh toggle
+  document.getElementById('autorefresh').addEventListener('change', (e) => {
+    if (e.target.checked) {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+  });
+  
+  // Add stock form
+  document.getElementById('addStockForm').addEventListener('submit', handleAddStock);
+}
+
+function filterInventory() {
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+  const rows = document.querySelectorAll('#invTable tbody tr');
+  
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(searchTerm) ? '' : 'none';
+  });
+}
+
+function startPolling() {
+  if (polling) clearInterval(polling);
+  polling = setInterval(loadInventories, 5000);
+}
+
+function stopPolling() {
+  if (polling) clearInterval(polling);
+  polling = null;
+}
+
+// Quick adjust inventory
+document.addEventListener('click', async (e) => {
+  if (e.target.classList.contains('apply')) {
+    const pid = e.target.dataset.pid;
+    const input = document.querySelector(`input.delta[data-pid='${pid}']`);
+    const change = parseInt(input.value, 10) || 0;
+    
+    if (change === 0) return;
+    
+    try {
+      if (window.inventoryApp) window.inventoryApp.showLoading();
+      
+      const res = await fetch('/api/inventory/update', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          store_id: STORE_ID, 
+          product_id: pid, 
+          change, 
+          note: 'Quick adjustment',
+          transaction_type: 'manual'
+        })
+      });
+      
+      if (res.ok) {
+        if (window.inventoryApp) {
+          window.inventoryApp.showAlert('success', 'Inventory updated successfully');
+        }
+        input.value = '0';
+        await loadInventories();
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to update inventory');
+      }
+    } catch (error) {
+      console.error('Update error:', error);
+      alert('Network error occurred');
+    } finally {
+      if (window.inventoryApp) window.inventoryApp.hideLoading();
+    }
+  }
+});
+
+function addStock() {
+  // Load products for selection
+  loadProductsForAdd();
+  document.getElementById('addStockModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+async function loadProductsForAdd() {
+  try {
+    const response = await fetch('/api/report/summary');
+    const products = await response.json();
+    
+    const select = document.getElementById('productSelect');
+    select.innerHTML = '<option value="">Select a product</option>';
+    
+    products.forEach(product => {
+      const option = document.createElement('option');
+      option.value = product.product_id;
+      option.textContent = `${product.sku} - ${product.name}`;
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Failed to load products:', error);
+  }
+}
+
+function closeAddStockModal() {
+  document.getElementById('addStockModal').classList.remove('show');
+  document.body.style.overflow = 'auto';
+}
+
+async function handleAddStock(e) {
+  e.preventDefault();
+  
+  const productId = document.getElementById('productSelect').value;
+  const quantity = parseInt(document.getElementById('addQuantity').value);
+  const transactionType = document.getElementById('addTransactionType').value;
+  const notes = document.getElementById('addNotes').value;
+  
+  if (!productId || !quantity) {
+    alert('Please fill in all required fields');
+    return;
+  }
+  
+  try {
+    if (window.inventoryApp) window.inventoryApp.showLoading();
+    
+    const response = await fetch('/api/inventory/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        store_id: STORE_ID,
+        product_id: productId,
+        change: quantity,
+        note: notes || `Added stock via ${transactionType}`,
+        transaction_type: transactionType
+      })
+    });
+    
+    if (response.ok) {
+      if (window.inventoryApp) {
+        window.inventoryApp.showAlert('success', 'Stock added successfully');
+      }
+      closeAddStockModal();
+      document.getElementById('addStockForm').reset();
+      loadInventories();
+    } else {
+      const error = await response.json();
+      alert(error.error || 'Failed to add stock');
+    }
+    
+  } catch (error) {
+    console.error('Add stock error:', error);
+    alert('Network error occurred');
+  } finally {
+    if (window.inventoryApp) window.inventoryApp.hideLoading();
+  }
+}
+
+function exportInventory() {
+  // Generate CSV export of store inventory
+  const csv = generateStoreInventoryCSV();
+  downloadCSV(csv, `${STORE_ID}-inventory.csv`);
+}
+
+function generateStoreInventoryCSV() {
+  const headers = ['SKU', 'Product Name', 'Current Stock', 'Reorder Point', 'Status'];
+  const csvContent = [
+    headers.join(','),
+    ...inventoryData.map(item => [
+      item.sku,
+      `"${item.name}"`,
+      item.quantity,
+      item.reorder_point || 10,
+      item.quantity === 0 ? 'Out of Stock' : item.low_stock ? 'Low Stock' : 'Normal'
+    ].join(','))
+  ].join('\n');
+  
+  return csvContent;
+}
+
+function downloadCSV(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.setAttribute('hidden', '');
+  a.setAttribute('href', url);
+  a.setAttribute('download', filename);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function bulkAdjust() {
+  alert('Bulk adjust feature - coming soon!');
+}
+
+function editStore() {
+  alert('Edit store feature - coming soon!');
+}
+
+function viewReports() {
+  window.location.href = `/reports?store=${STORE_ID}`;
+}
+
+function viewProductHistory(productId) {
+  alert(`View history for product ${productId} - coming soon!`);
+}
+
+function setReorderPoint(productId) {
+  const newReorderPoint = prompt('Enter new reorder point:');
+  if (newReorderPoint !== null && !isNaN(newReorderPoint)) {
+    // API call to update reorder point would go here
+    alert(`Reorder point updated to ${newReorderPoint} for product ${productId}`);
+  }
+}
+
+// Initialize when page loads
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', loadInventories);
+} else {
+  loadInventories();
+}
+</script>
+{% endblock %}

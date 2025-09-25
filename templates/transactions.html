@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}Transactions - Inventory Pro{% endblock %}
+{% block page_title %}Transaction History{% endblock %}
+
+{% block breadcrumb %}
+<a href="/"><i class="fas fa-home"></i> Dashboard</a>
+<span>/</span>
+<a href="/transactions">Transactions</a>
+{% endblock %}
+
+{% block content %}
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="GET" action="/transactions">
+      <div class="row">
+        <div class="col-3">
+          <label class="form-label">Store</label>
+          <input type="text" name="store" class="form-control" value="{{ current_filters.store or '' }}" placeholder="Store name">
+        </div>
+        <div class="col-3">
+          <label class="form-label">Product</label>
+          <input type="text" name="product" class="form-control" value="{{ current_filters.product or '' }}" placeholder="Product name">
+        </div>
+        <div class="col-3">
+          <label class="form-label">Transaction Type</label>
+          <select name="type" class="form-control">
+            <option value="">All Types</option>
+            {% for type in transaction_types %}
+            <option value="{{ type.name }}" {% if type.name == current_filters.type %}selected{% endif %}>
+              {{ type.name|title }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-3">
+          <label class="form-label">&nbsp;</label>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="/transactions" class="btn btn-secondary">Clear</a>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Transactions Table -->
+<div class="card">
+  <div class="card-header">
+    <h4>Transaction History</h4>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Store</th>
+            <th>Product</th>
+            <th>SKU</th>
+            <th>Type</th>
+            <th>Change</th>
+            <th>Note</th>
+            <th>Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for transaction in transactions %}
+          <tr>
+            <td>{{ transaction.created_at }}</td>
+            <td>{{ transaction.store_name }}</td>
+            <td>{{ transaction.product_name }}</td>
+            <td><span class="sku-badge">{{ transaction.sku }}</span></td>
+            <td>
+              <span class="badge badge-secondary">{{ transaction.transaction_type|title }}</span>
+            </td>
+            <td>
+              {% if transaction.change > 0 %}
+                <span class="text-success">+{{ transaction.change }}</span>
+              {% else %}
+                <span class="text-danger">{{ transaction.change }}</span>
+              {% endif %}
+            </td>
+            <td>{{ transaction.note or '-' }}</td>
+            <td>
+              {% if transaction.reference_number %}
+                <code>{{ transaction.reference_number }}</code>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<style>
+.sku-badge {
+  background: var(--primary-color);
+  color: white;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-family: monospace;
+}
+
+.badge-secondary {
+  background: var(--gray-500);
+  color: white;
+}
+
+code {
+  background: var(--gray-100);
+  color: var(--gray-700);
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+}
+</style>
+{% endblock %}

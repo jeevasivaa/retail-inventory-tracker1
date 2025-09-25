@@ -1,0 +1,734 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventory Management - Inventory Pro{% endblock %}
+{% block page_title %}Bulk Inventory Management{% endblock %}
+
+{% block breadcrumb %}
+<a href="/"><i class="fas fa-home"></i> Dashboard</a>
+<span>/</span>
+<a href="/inventory">Inventory</a>
+{% endblock %}
+
+{% block content %}
+<!-- Action Bar -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h3 class="mb-0">Inventory Management</h3>
+    <p class="text-muted">Manage stock levels across all stores</p>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-secondary" onclick="exportInventory()">
+      <i class="fas fa-download"></i> Export
+    </button>
+    <button class="btn btn-warning" onclick="bulkUpdate()">
+      <i class="fas fa-edit"></i> Bulk Update
+    </button>
+    <button class="btn btn-success" onclick="refreshInventory()">
+      <i class="fas fa-sync"></i> Refresh
+    </button>
+  </div>
+</div>
+
+<!-- Filter & Search Bar -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-3">
+        <label class="form-label">Search</label>
+        <input type="text" id="inventorySearch" class="form-control" placeholder="Search products or SKU...">
+      </div>
+      <div class="col-2">
+        <label class="form-label">Store</label>
+        <select id="storeFilter" class="form-control">
+          <option value="">All Stores</option>
+          <!-- Stores will be loaded dynamically -->
+        </select>
+      </div>
+      <div class="col-2">
+        <label class="form-label">Status</label>
+        <select id="statusFilter" class="form-control">
+          <option value="">All Status</option>
+          <option value="in-stock">In Stock</option>
+          <option value="low-stock">Low Stock</option>
+          <option value="out-of-stock">Out of Stock</option>
+        </select>
+      </div>
+      <div class="col-2">
+        <label class="form-label">Category</label>
+        <select id="categoryFilter" class="form-control">
+          <option value="">All Categories</option>
+          <!-- Categories will be loaded dynamically -->
+        </select>
+      </div>
+      <div class="col-3">
+        <label class="form-label">&nbsp;</label>
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary" onclick="applyFilters()">Filter</button>
+          <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+          <button class="btn btn-info" onclick="showLowStockOnly()">Low Stock</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Inventory Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="d-flex justify-content-between align-items-center">
+      <h4 class="mb-0">Inventory Overview</h4>
+      <div class="d-flex align-items-center gap-3">
+        <span class="text-muted">Total Items: <strong id="totalItems">0</strong></span>
+        <div class="form-check">
+          <input type="checkbox" id="autoRefresh" class="form-check-input" checked>
+          <label class="form-check-label" for="autoRefresh">Auto-refresh</label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-container">
+      <table id="inventoryTable" class="table">
+        <thead>
+          <tr>
+            <th>
+              <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+            </th>
+            <th>Product</th>
+            <th>SKU</th>
+            <th>Store</th>
+            <th>Current Stock</th>
+            <th>Reorder Point</th>
+            <th>Status</th>
+            <th>Last Updated</th>
+            <th>Quick Action</th>
+          </tr>
+        </thead>
+        <tbody id="inventoryTableBody">
+          <!-- Data will be loaded dynamically -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer">
+    <div class="d-flex justify-content-between align-items-center">
+      <span class="text-muted">Showing <span id="showingCount">0</span> items</span>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-secondary" onclick="selectLowStock()">Select Low Stock</button>
+        <button class="btn btn-sm btn-primary" onclick="bulkAdjustSelected()" disabled id="bulkAdjustBtn">
+          Bulk Adjust Selected
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Update Modal -->
+<div id="bulkUpdateModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Bulk Inventory Update</h3>
+      <span class="close" onclick="closeBulkUpdateModal()">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i>
+        You have selected <strong id="selectedCount">0</strong> items for bulk update.
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Update Type</label>
+        <select id="updateType" class="form-control">
+          <option value="set">Set to specific quantity</option>
+          <option value="add">Add to current quantity</option>
+          <option value="subtract">Subtract from current quantity</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Quantity</label>
+        <input type="number" id="bulkQuantity" class="form-control" min="0" placeholder="Enter quantity">
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea id="bulkNotes" class="form-control" rows="3" placeholder="Reason for bulk update (optional)"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Transaction Type</label>
+        <select id="bulkTransactionType" class="form-control">
+          <option value="manual">Manual Adjustment</option>
+          <option value="purchase">Stock Purchase</option>
+          <option value="return">Product Return</option>
+          <option value="damage">Damaged Goods</option>
+          <option value="theft">Theft/Loss</option>
+        </select>
+      </div>
+      
+      <div class="d-flex justify-content-end gap-2 mt-4">
+        <button type="button" class="btn btn-secondary" onclick="closeBulkUpdateModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="performBulkUpdate()">
+          <i class="fas fa-save"></i> Update Inventory
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Inventory page specific styles */
+.table {
+  margin-bottom: 0;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--gray-50);
+}
+
+.inventory-row {
+  transition: var(--transition);
+}
+
+.inventory-row:hover {
+  background: var(--gray-50);
+}
+
+.inventory-row.selected {
+  background: rgba(102, 126, 234, 0.1);
+  border-left: 3px solid var(--primary-color);
+}
+
+.stock-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.stock-status.in-stock {
+  background: rgba(72, 187, 120, 0.1);
+  color: var(--success-color);
+}
+
+.stock-status.low-stock {
+  background: rgba(237, 137, 54, 0.1);
+  color: var(--warning-color);
+}
+
+.stock-status.out-of-stock {
+  background: rgba(245, 101, 101, 0.1);
+  color: var(--danger-color);
+}
+
+.quick-adjust {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.quick-adjust input {
+  width: 60px;
+  padding: var(--spacing-xs);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+}
+
+.product-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.product-name {
+  font-weight: 500;
+  color: var(--gray-800);
+}
+
+.product-category {
+  font-size: var(--font-size-xs);
+  color: var(--gray-500);
+  background: var(--gray-100);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  width: fit-content;
+}
+
+.sku-badge {
+  background: var(--primary-color);
+  color: white;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-family: monospace;
+  font-weight: 500;
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.form-check-input {
+  margin: 0;
+}
+
+.alert {
+  margin-bottom: var(--spacing-lg);
+}
+</style>
+
+<script>
+// Inventory management JavaScript
+let inventoryData = [];
+let filteredData = [];
+let selectedItems = new Set();
+
+document.addEventListener('DOMContentLoaded', function() {
+  loadInventoryData();
+  initializeFilters();
+  initializeAutoRefresh();
+});
+
+async function loadInventoryData() {
+  try {
+    if (window.inventoryApp) {
+      window.inventoryApp.showLoading();
+    }
+    
+    const response = await fetch('/api/report/summary');
+    const summaryData = await response.json();
+    
+    // Get detailed inventory data (this would need a new API endpoint)
+    // For now, we'll simulate the data structure
+    inventoryData = summaryData.map(item => ({
+      id: item.product_id,
+      product_name: item.name,
+      sku: item.sku,
+      current_stock: item.total_quantity || 0,
+      reorder_point: item.reorder_point || 10,
+      category_name: item.category_name || 'Uncategorized',
+      store_name: 'All Stores', // This would come from actual API
+      low_stock: item.low_stock || (item.total_quantity <= (item.reorder_point || 10)),
+      last_updated: new Date().toISOString().split('T')[0]
+    }));
+    
+    filteredData = [...inventoryData];
+    renderInventoryTable();
+    updateCounters();
+    
+  } catch (error) {
+    console.error('Failed to load inventory data:', error);
+    showError('Failed to load inventory data');
+  } finally {
+    if (window.inventoryApp) {
+      window.inventoryApp.hideLoading();
+    }
+  }
+}
+
+function renderInventoryTable() {
+  const tbody = document.getElementById('inventoryTableBody');
+  tbody.innerHTML = '';
+  
+  filteredData.forEach(item => {
+    const row = document.createElement('tr');
+    row.className = 'inventory-row';
+    row.dataset.id = item.id;
+    
+    // Determine stock status
+    let statusClass = 'in-stock';
+    let statusText = 'In Stock';
+    let statusIcon = 'fa-check-circle';
+    
+    if (item.current_stock === 0) {
+      statusClass = 'out-of-stock';
+      statusText = 'Out of Stock';
+      statusIcon = 'fa-times-circle';
+    } else if (item.low_stock || item.current_stock <= item.reorder_point) {
+      statusClass = 'low-stock';
+      statusText = 'Low Stock';
+      statusIcon = 'fa-exclamation-triangle';
+    }
+    
+    row.innerHTML = `
+      <td>
+        <input type="checkbox" class="item-checkbox" value="${item.id}" onchange="toggleItemSelection(${item.id})">
+      </td>
+      <td>
+        <div class="product-info">
+          <span class="product-name">${item.product_name}</span>
+          <span class="product-category">${item.category_name}</span>
+        </div>
+      </td>
+      <td>
+        <span class="sku-badge">${item.sku}</span>
+      </td>
+      <td>${item.store_name}</td>
+      <td>
+        <strong>${item.current_stock}</strong>
+      </td>
+      <td>${item.reorder_point}</td>
+      <td>
+        <span class="stock-status ${statusClass}">
+          <i class="fas ${statusIcon}"></i>
+          ${statusText}
+        </span>
+      </td>
+      <td>${item.last_updated}</td>
+      <td>
+        <div class="quick-adjust">
+          <input type="number" class="quick-qty" placeholder="±" min="-9999" max="9999" data-product-id="${item.id}">
+          <button class="btn btn-sm btn-primary" onclick="quickAdjust(${item.id})">
+            <i class="fas fa-check"></i>
+          </button>
+        </div>
+      </td>
+    `;
+    
+    tbody.appendChild(row);
+  });
+}
+
+function initializeFilters() {
+  // Search functionality
+  const searchInput = document.getElementById('inventorySearch');
+  let searchTimeout;
+  
+  searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      applyFilters();
+    }, 300);
+  });
+}
+
+function initializeAutoRefresh() {
+  const autoRefreshCheckbox = document.getElementById('autoRefresh');
+  let refreshInterval;
+  
+  autoRefreshCheckbox.addEventListener('change', function() {
+    if (this.checked) {
+      refreshInterval = setInterval(loadInventoryData, 30000); // 30 seconds
+    } else {
+      clearInterval(refreshInterval);
+    }
+  });
+  
+  // Start auto-refresh if checked
+  if (autoRefreshCheckbox.checked) {
+    refreshInterval = setInterval(loadInventoryData, 30000);
+  }
+}
+
+function applyFilters() {
+  const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
+  const storeFilter = document.getElementById('storeFilter').value;
+  const statusFilter = document.getElementById('statusFilter').value;
+  const categoryFilter = document.getElementById('categoryFilter').value;
+  
+  filteredData = inventoryData.filter(item => {
+    // Search filter
+    if (searchTerm && !item.product_name.toLowerCase().includes(searchTerm) && 
+        !item.sku.toLowerCase().includes(searchTerm)) {
+      return false;
+    }
+    
+    // Store filter
+    if (storeFilter && item.store_name !== storeFilter) {
+      return false;
+    }
+    
+    // Status filter
+    if (statusFilter) {
+      if (statusFilter === 'in-stock' && (item.current_stock === 0 || item.low_stock)) return false;
+      if (statusFilter === 'low-stock' && !item.low_stock) return false;
+      if (statusFilter === 'out-of-stock' && item.current_stock > 0) return false;
+    }
+    
+    // Category filter
+    if (categoryFilter && item.category_name !== categoryFilter) {
+      return false;
+    }
+    
+    return true;
+  });
+  
+  renderInventoryTable();
+  updateCounters();
+}
+
+function clearFilters() {
+  document.getElementById('inventorySearch').value = '';
+  document.getElementById('storeFilter').value = '';
+  document.getElementById('statusFilter').value = '';
+  document.getElementById('categoryFilter').value = '';
+  
+  filteredData = [...inventoryData];
+  renderInventoryTable();
+  updateCounters();
+}
+
+function showLowStockOnly() {
+  document.getElementById('statusFilter').value = 'low-stock';
+  applyFilters();
+}
+
+function updateCounters() {
+  document.getElementById('totalItems').textContent = inventoryData.length;
+  document.getElementById('showingCount').textContent = filteredData.length;
+}
+
+function toggleSelectAll() {
+  const selectAllCheckbox = document.getElementById('selectAll');
+  const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+  
+  if (selectAllCheckbox.checked) {
+    itemCheckboxes.forEach(checkbox => {
+      checkbox.checked = true;
+      selectedItems.add(parseInt(checkbox.value));
+    });
+  } else {
+    itemCheckboxes.forEach(checkbox => {
+      checkbox.checked = false;
+      selectedItems.clear();
+    });
+  }
+  
+  updateBulkActions();
+}
+
+function toggleItemSelection(itemId) {
+  if (selectedItems.has(itemId)) {
+    selectedItems.delete(itemId);
+  } else {
+    selectedItems.add(itemId);
+  }
+  
+  // Update select all checkbox
+  const selectAllCheckbox = document.getElementById('selectAll');
+  const visibleItems = document.querySelectorAll('.item-checkbox').length;
+  selectAllCheckbox.indeterminate = selectedItems.size > 0 && selectedItems.size < visibleItems;
+  selectAllCheckbox.checked = selectedItems.size === visibleItems && visibleItems > 0;
+  
+  updateBulkActions();
+}
+
+function updateBulkActions() {
+  const bulkBtn = document.getElementById('bulkAdjustBtn');
+  bulkBtn.disabled = selectedItems.size === 0;
+  bulkBtn.textContent = `Bulk Adjust Selected (${selectedItems.size})`;
+}
+
+function selectLowStock() {
+  // Clear current selection
+  selectedItems.clear();
+  document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
+  
+  // Select low stock items
+  filteredData.forEach(item => {
+    if (item.low_stock || item.current_stock <= item.reorder_point) {
+      selectedItems.add(item.id);
+      const checkbox = document.querySelector(`.item-checkbox[value="${item.id}"]`);
+      if (checkbox) checkbox.checked = true;
+    }
+  });
+  
+  updateBulkActions();
+}
+
+async function quickAdjust(productId) {
+  const input = document.querySelector(`.quick-qty[data-product-id="${productId}"]`);
+  const change = parseInt(input.value);
+  
+  if (!change || change === 0) {
+    alert('Please enter a quantity change');
+    return;
+  }
+  
+  try {
+    const response = await fetch('/api/inventory/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        store_id: 1, // This would need to be dynamic
+        product_id: productId,
+        change: change,
+        note: 'Quick adjustment',
+        transaction_type: 'manual'
+      })
+    });
+    
+    if (response.ok) {
+      input.value = '';
+      if (window.inventoryApp) {
+        window.inventoryApp.showAlert('success', 'Inventory updated successfully');
+      }
+      loadInventoryData(); // Refresh data
+    } else {
+      const error = await response.json();
+      alert(error.error || 'Failed to update inventory');
+    }
+  } catch (error) {
+    console.error('Quick adjust error:', error);
+    alert('Network error occurred');
+  }
+}
+
+function bulkAdjustSelected() {
+  if (selectedItems.size === 0) {
+    alert('Please select items to update');
+    return;
+  }
+  
+  document.getElementById('selectedCount').textContent = selectedItems.size;
+  document.getElementById('bulkUpdateModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeBulkUpdateModal() {
+  document.getElementById('bulkUpdateModal').classList.remove('show');
+  document.body.style.overflow = 'auto';
+}
+
+async function performBulkUpdate() {
+  const updateType = document.getElementById('updateType').value;
+  const quantity = parseInt(document.getElementById('bulkQuantity').value);
+  const notes = document.getElementById('bulkNotes').value;
+  const transactionType = document.getElementById('bulkTransactionType').value;
+  
+  if (!quantity && quantity !== 0) {
+    alert('Please enter a quantity');
+    return;
+  }
+  
+  try {
+    if (window.inventoryApp) {
+      window.inventoryApp.showLoading();
+    }
+    
+    const updates = Array.from(selectedItems).map(productId => {
+      const item = inventoryData.find(i => i.id === productId);
+      let newQuantity;
+      
+      switch (updateType) {
+        case 'set':
+          newQuantity = quantity;
+          break;
+        case 'add':
+          newQuantity = item.current_stock + quantity;
+          break;
+        case 'subtract':
+          newQuantity = Math.max(0, item.current_stock - quantity);
+          break;
+      }
+      
+      return {
+        store_id: 1, // This would need to be dynamic
+        product_id: productId,
+        quantity: newQuantity,
+        note: notes || `Bulk ${updateType}: ${quantity}`
+      };
+    });
+    
+    const response = await fetch('/api/inventory/bulk-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      if (window.inventoryApp) {
+        window.inventoryApp.showAlert('success', `Successfully updated ${result.success_count} items`);
+      }
+      
+      if (result.errors.length > 0) {
+        console.error('Bulk update errors:', result.errors);
+      }
+      
+      // Clear selection and refresh data
+      selectedItems.clear();
+      document.querySelectorAll('.item-checkbox').forEach(cb => cb.checked = false);
+      updateBulkActions();
+      closeBulkUpdateModal();
+      loadInventoryData();
+      
+    } else {
+      alert('Failed to perform bulk update');
+    }
+    
+  } catch (error) {
+    console.error('Bulk update error:', error);
+    alert('Network error occurred');
+  } finally {
+    if (window.inventoryApp) {
+      window.inventoryApp.hideLoading();
+    }
+  }
+}
+
+function refreshInventory() {
+  loadInventoryData();
+}
+
+function exportInventory() {
+  // Generate CSV export
+  const csv = generateCSV(filteredData);
+  downloadCSV(csv, 'inventory-export.csv');
+}
+
+function bulkUpdate() {
+  // Show bulk update interface
+  alert('Bulk update feature - select items first');
+}
+
+function generateCSV(data) {
+  const headers = ['SKU', 'Product Name', 'Category', 'Store', 'Current Stock', 'Reorder Point', 'Status'];
+  const csvContent = [
+    headers.join(','),
+    ...data.map(item => [
+      item.sku,
+      `"${item.product_name}"`,
+      item.category_name,
+      item.store_name,
+      item.current_stock,
+      item.reorder_point,
+      item.low_stock ? 'Low Stock' : 'Normal'
+    ].join(','))
+  ].join('\n');
+  
+  return csvContent;
+}
+
+function downloadCSV(content, filename) {
+  const blob = new Blob([content], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.setAttribute('hidden', '');
+  a.setAttribute('href', url);
+  a.setAttribute('download', filename);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function showError(message) {
+  if (window.inventoryApp) {
+    window.inventoryApp.showAlert('error', message);
+  } else {
+    alert(message);
+  }
+}
+</script>
+{% endblock %}
